@@ -194,3 +194,47 @@ def test_drift_csv_returns_503_when_no_reference(client, monkeypatch, tmp_path):
     )
     assert r.status_code == 503
     assert "nao encontrada" in r.json()["detail"].lower()
+
+def test_predict_csv_rejects_non_csv(client):
+    """predict_csv deve rejeitar arquivos que nao sao CSV."""
+    api_key = client.post("/generate_api_key").json()["api_key"]
+    r = client.post(
+        "/predict_csv",
+        files={"file": ("test.txt", b"foo,bar\n1,2", "text/plain")},
+        headers={"x-api-key": api_key},
+    )
+    assert r.status_code == 400
+
+
+def test_predict_csv_rejects_empty_csv(client):
+    """predict_csv deve rejeitar CSV vazio."""
+    api_key = client.post("/generate_api_key").json()["api_key"]
+    r = client.post(
+        "/predict_csv",
+        files={"file": ("empty.csv", b"col1,col2\n", "text/csv")},
+        headers={"x-api-key": api_key},
+    )
+    # Pode ser 400 ou 422 dependendo de quando a validacao dispara
+    assert r.status_code in (400, 422)
+
+
+def test_predict_requires_60_prices(client):
+    """predict deve rejeitar payload com menos de 60 precos."""
+    api_key = client.post("/generate_api_key").json()["api_key"]
+    r = client.post(
+        "/predict",
+        json={"prices": [100.0] * 30},
+        headers={"x-api-key": api_key},
+    )
+    assert r.status_code == 422
+
+
+def test_predict_rejects_non_numeric_prices(client):
+    """predict deve rejeitar payload com valores nao numericos."""
+    api_key = client.post("/generate_api_key").json()["api_key"]
+    r = client.post(
+        "/predict",
+        json={"prices": ["abc"] * 60},
+        headers={"x-api-key": api_key},
+    )
+    assert r.status_code == 422

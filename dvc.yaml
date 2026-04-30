@@ -1,0 +1,27 @@
+stages:
+
+  ingest:
+    cmd: >
+      python -m src.features.ingestion
+      --symbol DIS
+      --start-date 2014-01-01
+      --end-date 2024-12-31
+      --output data/raw/prices.parquet
+    deps:
+      - src/features/ingestion.py
+    outs:
+      - data/raw/prices.parquet
+
+  train:
+    cmd: python -m src.models.train
+    deps:
+      - src/models/train.py
+      - src/features/feature_engineering.py
+      - data/raw/prices.parquet
+      - configs/model_config.yaml
+    outs:
+      - artifacts/modelo_lstm.keras
+      - artifacts/scaler.pkl
+    metrics:
+      - artifacts/metrics.json:
+          cache: false

@@ -1,0 +1,93 @@
+name: Retrain Model
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Motivo do retreino (drift detectado, schedule, manual)"
+        required: false
+        default: "manual"
+      dry_run:
+        description: "Apenas simular sem treinar de verdade"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+  workflow_call:
+    inputs:
+      reason:
+        type: string
+        default: "drift-trigger"
+      dry_run:
+        type: string
+        default: "false"
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Log retrain context
+        run: |
+          echo "===================================="
+          echo "Retrain triggered"
+          echo "Reason:    ${{ inputs.reason || 'scheduled' }}"
+          echo "Dry run:   ${{ inputs.dry_run || 'false' }}"
+          echo "Commit:    ${{ github.sha }}"
+          echo "Triggered: ${{ github.event_name }}"
+          echo "===================================="
+
+      - name: Train new model version
+        if: inputs.dry_run != 'true'
+        env:
+          MLFLOW_TRACKING_URI: file:./mlruns
+          MLFLOW_OWNER: ci-pipeline
+        run: |
+          python -m src.models.train
+
+      - name: Skip training (dry run)
+        if: inputs.dry_run == 'true'
+        run: |
+          echo "Dry run mode - skipping actual training."
+          echo "To run for real: trigger manually with dry_run=false."
+          echo "Pipeline structure validated:"
+          python -c "from src.models.train import build_model, set_seeds; print('  - imports OK')"
+          python -c "from src.features.ingestion import download_prices; print('  - ingestion OK')"
+
+      - name: Champion-challenger evaluation
+        if: inputs.dry_run != 'true'
+        run: |
+          echo "TODO: comparar challenger vs champion"
+          echo "Critério (do PDF Datathon p.7): so promover se delta_mae <= -0.005"
+          echo "Implementação detalhada: docs/RUNBOOK.md secao 4"
+
+      - name: Upload run artifacts
+        if: inputs.dry_run != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlruns-${{ github.run_id }}
+          path: mlruns/
+          retention-days: 30

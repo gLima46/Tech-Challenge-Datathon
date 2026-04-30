@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Testes / cobertura
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+test-results.xml
+.mypy_cache/
+.ruff_cache/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Dados (versionados via DVC, nao Git)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Artefatos (versionados via MLflow / DVC)
+artifacts/
+mlruns/
+mlartifacts/
+
+# Secrets
+.env
+*.pem
+*.key
+
+# DVC
+/.dvc/cache
+/.dvc/tmp
+
+# Docker
+*.log
+
+# MLflow local SQLite backend
+mlflow.db
+mlflow.db-journal
+
+# Setuptools metadata
+*.egg-info/
+datathon.egg-info/

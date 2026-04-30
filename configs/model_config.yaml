@@ -1,0 +1,38 @@
+data:
+  symbol: DIS
+  start_date: "2014-01-01"
+  end_date: "2024-12-31"
+  target_column: Close
+
+features:
+  time_steps: 60
+  train_split: 0.5
+
+model:
+  lstm_units: [64, 64]
+  dropout: 0.2
+  optimizer: adam
+  loss: mse
+
+training:
+  epochs: 50
+  batch_size: 32
+  seed: 42
+  early_stopping_patience: 10
+  reduce_lr_patience: 5
+  reduce_lr_factor: 0.5
+  reduce_lr_min: 0.00001
+
+mlflow:
+  experiment_name: datathon-fase05-lstm
+  tracking_uri: http://localhost:5000
+  registered_model_name: lstm-price-forecaster
+
+serving:
+  future_days: 10
+  api_time_steps: 60
+
+monitoring:
+  psi_warning: 0.10
+  psi_retrain: 0.20
+  min_samples_for_drift: 100

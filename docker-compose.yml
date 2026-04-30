@@ -1,0 +1,67 @@
+services:
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.1
+    container_name: datathon-mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+
+  api:
+    build:
+      context: .
+      dockerfile: src/serving/Dockerfile
+    container_name: datathon-api
+    ports:
+      - "8000:8000"
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_MODEL_NAME: lstm-price-forecaster
+      MLFLOW_MODEL_ALIAS: production
+      INITIAL_API_KEY: dev-key-trocar-em-prod
+    depends_on:
+      - mlflow
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+
+  prometheus:
+    build:
+      context: ./configs/prometheus
+    container_name: datathon-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+
+  grafana:
+    build:
+      context: ./configs/grafana
+    container_name: datathon-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  mlflow-data:
+  prometheus-data:
+  grafana-data:

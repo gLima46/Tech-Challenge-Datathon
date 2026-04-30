@@ -1,0 +1,75 @@
+name: Drift Check
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+
+  workflow_dispatch:
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      should_retrain: ${{ steps.drift.outputs.should_retrain }}
+      psi: ${{ steps.drift.outputs.psi }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run drift check
+        id: drift
+        run: |
+          python <<'PY'
+          import os
+          import sys
+          from src.features.ingestion import download_prices
+          from src.monitoring.drift import detect_drift
+
+          # Pega janela recente vs mais recente ainda
+          # (em producao real seria: referencia do MLflow vs ultimos 30 dias)
+          df = download_prices("DIS", "2023-01-01", "2024-12-31")
+          prices = df["Close"].values
+
+          reference = prices[:-30]
+          current = prices[-30:]
+
+          report = detect_drift(reference, current)
+          print(f"PSI: {report.psi:.4f}")
+          print(f"Status: {report.status}")
+          print(f"Mensagem: {report.message}")
+
+          should_retrain = "true" if report.status == "retrain" else "false"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"psi={report.psi:.4f}\n")
+              f.write(f"should_retrain={should_retrain}\n")
+          PY
+
+      - name: Drift summary
+        run: |
+          echo "## Drift Check Result" >> $GITHUB_STEP_SUMMARY
+          echo "- **PSI**: ${{ steps.drift.outputs.psi }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Should retrain**: ${{ steps.drift.outputs.should_retrain }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Threshold**: 0.20 (definido em configs/model_config.yaml)" >> $GITHUB_STEP_SUMMARY
+
+  trigger-retrain:
+    needs: check-drift
+    if: needs.check-drift.outputs.should_retrain == 'true'
+    uses: ./.github/workflows/retrain.yml
+    with:
+      reason: "drift-detected (PSI=${{ needs.check-drift.outputs.psi }})"
+      dry_run: "false"

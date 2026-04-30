@@ -139,6 +139,10 @@ def test_drift_csv_endpoint_with_drifted_data(client, tmp_path):
     assert payload["psi"] > 0.10
 
 
+@pytest.mark.skipif(
+    not Path("artifacts/reference_prices.parquet").exists(),
+    reason="Sem referencia de drift",
+)
 def test_drift_csv_rejects_non_csv(client):
     api_key = client.post("/generate_api_key").json()["api_key"]
     r = client.post(
@@ -149,10 +153,13 @@ def test_drift_csv_rejects_non_csv(client):
     assert r.status_code == 400
 
 
+@pytest.mark.skipif(
+    not Path("artifacts/reference_prices.parquet").exists(),
+    reason="Sem referencia de drift",
+)
 def test_drift_csv_rejects_insufficient_rows(client, tmp_path):
     """CSV com menos de 100 valores deve ser rejeitado."""
     import pandas as pd
-
     csv_path = tmp_path / "tiny.csv"
     pd.DataFrame({"Close": [100.0, 101.0, 102.0]}).to_csv(csv_path, index=False)
 
@@ -165,3 +172,25 @@ def test_drift_csv_rejects_insufficient_rows(client, tmp_path):
         )
     assert r.status_code == 400
     assert "100" in r.json()["detail"]
+
+
+def test_drift_csv_returns_503_when_no_reference(client, monkeypatch, tmp_path):
+    """Quando referencia nao existe, endpoint deve retornar 503."""
+    from src.serving import app as app_module
+
+    # Aponta para path que nao existe
+    monkeypatch.setattr(
+        app_module,
+        "FALLBACK_REFERENCE_PATH",
+        tmp_path / "nao_existe.parquet",
+    )
+
+    api_key = client.post("/generate_api_key").json()["api_key"]
+    fake_csv = b"Close\n" + b"\n".join(str(100 + i).encode() for i in range(150))
+    r = client.post(
+        "/monitoring/drift_csv",
+        files={"file": ("test.csv", fake_csv, "text/csv")},
+        headers={"x-api-key": api_key},
+    )
+    assert r.status_code == 503
+    assert "nao encontrada" in r.json()["detail"].lower()

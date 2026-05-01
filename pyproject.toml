@@ -3,12 +3,12 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "datathon-grupo-xx"
+name = "lstm-forecaster"
 version = "0.1.0"
 description = "Datathon FIAP Fase 05 - Plataforma MLOps para previsao de series temporais"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
-authors = [{ name = "Lima", email = "lima@example.com" }]
+authors = [{ name = "Gabriel Lima", email = "gabriellimapedrosa46@gmail.com" }]
 license = { text = "MIT" }
 
 dependencies = [

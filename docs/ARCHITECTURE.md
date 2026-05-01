@@ -46,7 +46,7 @@
 ## Mapeamento Gap → Componente
 
 | Gap (PDF) | Componente | Onde | Como |
-|---|---|---|---|
+|------------|
 | 01 - Sem monitoramento | Prometheus + Grafana | `src/serving/app.py` `docker-compose.yml` | `Instrumentator` expõe `/metrics`, Grafana consome |
 | 02 - SPOF em notebook | Pipeline DVC | `dvc.yaml` | Stages isolados, sem notebook como trigger |
 | 03 - Feature store destrutivo | Decisão arquitetural | `docs/ARCHITECTURE.md` §"GAP 03 em detalhe" | Não aplicável: modelo univariado, features chegam no request, custo > benefício. Cenários de evolução documentados. |
@@ -59,51 +59,51 @@
 
 ## GAP 03 em detalhe — por que não há feature store nesta arquitetura
 
-O PDF do Datathon (p. 5) descreve o anti-padrão de **feature store destrutivo**:
+O PDF do Datathon (p. 5) descreve o anti-padrão de feature store destrutivo:
 caches Redis ou tabelas que sofrem `FLUSHALL` periódico, criando janelas em que
 o serving fica sem features e o modelo retorna predições degradadas. A
 recomendação canônica é usar `upsert` incremental com Change Data Feed.
 
-**Decisão arquitetural: não usamos feature store nesta entrega.** A justificativa
+Decisão arquitetural: não usamos feature store nesta entrega. A justificativa
 parte da natureza do problema:
 
-1. **Modelo univariado.** O LSTM aqui consome apenas a série temporal de `Close`.
+1. Modelo univariado. O LSTM aqui consome apenas a série temporal de `Close`.
    Não há features derivadas (médias móveis, volume normalizado, indicadores
    técnicos, dados macro) que precisem ser pré-computadas e compartilhadas entre
    modelos. Não existe "feature compartilhada" para hospedar.
 
-2. **Janela curta e local ao request.** A inferência precisa apenas dos últimos
-   60 preços. Esses dados chegam **no próprio request HTTP** (`POST /predict`
+2. Janela curta e local ao request. A inferência precisa apenas dos últimos
+   60 preços. Esses dados chegam no próprio request HTTP (`POST /predict`
    com array de 60 floats), não vêm de um cache externo. Não há lookup remoto,
    logo não há janela vulnerável a flush.
 
-3. **Custo > benefício para um único consumidor.** Feature stores se justificam
+3. Custo > benefício para um único consumidor. Feature stores se justificam
    quando múltiplos modelos compartilham as mesmas features (ex: detecção de
    fraude consome `customer_velocity_30d` que também alimenta o modelo de
    risco). Aqui temos um modelo, uma feature primária, um endpoint. Adicionar
    Redis introduz operação, monitoramento e ponto de falha sem ganho real.
 
-**Como evoluiríamos se o escopo crescesse:**
+Como evoluiríamos se o escopo crescesse:
 
-- **Cenário A — adicionar features técnicas (RSI, MACD, Bollinger):**
+- Cenário A — adicionar features técnicas (RSI, MACD, Bollinger):
   manteríamos cálculo on-the-fly dentro de `src/features/feature_engineering.py`,
   rodando no `predict_next_days`. Continua sem feature store.
 
-- **Cenário B — múltiplos ativos servidos pela mesma API:** introduziríamos
+- Cenário B — múltiplos ativos servidos pela mesma API: introduziríamos
   cache de features pré-computadas em Redis com:
-  - **Padrão upsert incremental** (`HSET ticker:DIS:close <new_value>` +
+  - Padrão upsert incremental (`HSET ticker:DIS:close <new_value>` +
     TTL de 7 dias), nunca `FLUSHALL`
-  - **Change Data Feed** consumindo updates do banco transacional como source
+  - Change Data Feed consumindo updates do banco transacional como source
     of truth
-  - **Estratégia shadow ou canary** para atualizações de schema, garantindo
+  - Estratégia shadow ou canary para atualizações de schema, garantindo
     que a versão antiga continua respondendo enquanto a nova sobe
 
-- **Cenário C — features compartilhadas entre múltiplos modelos:** aí sim
+- Cenário C — features compartilhadas entre múltiplos modelos: aí sim
   Feast ou Tecton justificariam o overhead, com offline store em Parquet/Delta
   e online store em Redis, ambos seguindo o mesmo padrão upsert.
 
-**Resumo:** o anti-padrão do GAP 03 é resolvido aqui pela **ausência da
-necessidade**, não pela negligência. Documentamos o caminho de evolução para
+Resumo: o anti-padrão do GAP 03 é resolvido aqui pela ausência da
+necessidade, não pela negligência. Documentamos o caminho de evolução para
 deixar explícito que a decisão é consciente.
 
 ## Decisões e trade-offs

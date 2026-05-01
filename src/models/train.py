@@ -5,9 +5,11 @@ import logging
 import os
 import random
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
+import joblib
 import mlflow
 import mlflow.tensorflow
 import numpy as np
@@ -73,7 +75,7 @@ def evaluate_model(
     y: np.ndarray,
     scaler: Any,
 ) -> dict[str, float]:
-    """Avalia modelo retornando métricas no espaco original (nao-normalizado).
+    """Avalia modelo retornando métricas no espaço original (não-normalizado).
 
     Args:
         model: Modelo treinado.
@@ -96,15 +98,13 @@ def evaluate_model(
 
 
 def get_git_sha() -> str:
-    """Retorna o SHA do commit atual (GAP 05: rastreabilidade de codigo)."""
+    """Retorna o SHA do commit atual (GAP 05: rastreabilidade de código)."""
     try:
-        output = subprocess.check_output(  # nosec B603 B607
+        output = subprocess.check_output(  
             ["git", "rev-parse", "HEAD"],
             stderr=subprocess.DEVNULL,
         )
-        decoded: str = output.decode("utf-8")
-        stripped: str = decoded.strip()
-        return stripped
+        return output.decode("utf-8").strip()
     except Exception:
         return "unknown"
 
@@ -213,46 +213,40 @@ def train(config_path: str | Path = "configs/model_config.yaml") -> str:
         mlflow.log_metrics(metrics)
         logger.info("Métricas finais: %s", metrics)
 
-        artifacts_dir = Path("artifacts")
-        artifacts_dir.mkdir(exist_ok=True)
-
-        model_path = artifacts_dir / "modelo_lstm.keras"
-        scaler_path = artifacts_dir / "scaler.pkl"
-        model.save(model_path)
-
-        import joblib
-
-        joblib.dump(scaler, scaler_path)
-
-        mlflow.log_artifact(str(model_path))
-        mlflow.log_artifact(str(scaler_path))
-        mlflow.tensorflow.log_model(model, artifact_path="keras_model")
-
         reference_window_size = 252
         reference_df = df[[cfg["data"]["target_column"]]].tail(reference_window_size)
-        reference_path = artifacts_dir / "reference_prices.parquet"
-        reference_df.to_parquet(reference_path)
-        mlflow.log_artifact(str(reference_path))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_model = os.path.join(tmp, "modelo_lstm.keras")
+            tmp_scaler = os.path.join(tmp, "scaler.pkl")
+            tmp_ref = os.path.join(tmp, "reference_prices.parquet")
+
+            model.save(tmp_model)
+            joblib.dump(scaler, tmp_scaler)
+            reference_df.to_parquet(tmp_ref)
+
+            mlflow.log_artifact(tmp_model, artifact_path="model")
+            mlflow.log_artifact(tmp_scaler, artifact_path="model")
+            mlflow.log_artifact(tmp_ref, artifact_path="data")
+
         logger.info(
-            "Referencia para drift salva em %s (%d linhas)",
-            reference_path,
-            len(reference_df),
+            "Referência para drift salva (%d linhas)", len(reference_df)
         )
 
         run_id = run.info.run_id
-        model_uri = f"runs:/{run_id}/keras_model"
         try:
+            mlflow.tensorflow.log_model(model, artifact_path="keras_model")
+            model_uri = f"runs:/{run_id}/keras_model"
             mlflow.register_model(
                 model_uri=model_uri,
                 name=cfg["mlflow"]["registered_model_name"],
             )
             logger.info("Modelo registrado no Model Registry")
         except Exception as exc:
-            logger.warning("Nao foi possivel registrar no Model Registry: %s", exc)
+            logger.warning("Não foi possível registrar no Model Registry: %s", exc)
 
-        logger.info("Run concluido: %s", run_id)
-        run_id_str: str = str(run_id)
-        return run_id_str
+        logger.info("Run concluído: %s", run_id)
+        return str(run_id)
 
 
 if __name__ == "__main__":

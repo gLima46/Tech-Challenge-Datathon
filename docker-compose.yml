@@ -26,10 +26,17 @@ services:
       MLFLOW_MODEL_NAME: lstm-price-forecaster
       MLFLOW_MODEL_ALIAS: production
       INITIAL_API_KEY: dev-key-trocar-em-prod
+      GIT_PYTHON_REFRESH: quiet
+      MLFLOW_ARTIFACT_ROOT: /mlflow/artifacts
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     depends_on:
       - mlflow
     volumes:
-      - ./artifacts:/app/artifacts:ro
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+      - mlflow-data:/mlflow    
 
   prometheus:
     build:

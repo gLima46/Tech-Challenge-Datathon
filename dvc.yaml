@@ -25,3 +25,6 @@ stages:
     metrics:
       - artifacts/metrics.json:
           cache: false
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+      - ./configs:/app/configs:ro

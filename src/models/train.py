@@ -100,7 +100,7 @@ def evaluate_model(
 def get_git_sha() -> str:
     """Retorna o SHA do commit atual (GAP 05: rastreabilidade de código)."""
     try:
-        output = subprocess.check_output(  
+        output = subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
             stderr=subprocess.DEVNULL,
         )
@@ -255,3 +255,4 @@ if __name__ == "__main__":
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
     train()
+

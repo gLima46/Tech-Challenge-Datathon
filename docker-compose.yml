@@ -18,6 +18,8 @@ services:
     build:
       context: .
       dockerfile: src/serving/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     container_name: datathon-api
     ports:
       - "8000:8000"

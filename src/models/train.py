@@ -75,7 +75,7 @@ def evaluate_model(
     y: np.ndarray,
     scaler: Any,
 ) -> dict[str, float]:
-    """Avalia modelo retornando métricas no espaço original (não-normalizado).
+    """Avalia modelo retornando métricas no espaço original.
 
     Args:
         model: Modelo treinado.
@@ -98,9 +98,14 @@ def evaluate_model(
 
 
 def get_git_sha() -> str:
-    """Retorna o SHA do commit atual (GAP 05: rastreabilidade de código)."""
+    """Retorna o SHA do commit atual."""
+    env_sha = os.getenv("GIT_SHA")
+    if env_sha and env_sha != "unknown":
+        return env_sha
+
+    # Fallback: tenta executar git localmente
     try:
-        output = subprocess.check_output(
+        output = subprocess.check_output(  # nosec B603 B607
             ["git", "rev-parse", "HEAD"],
             stderr=subprocess.DEVNULL,
         )
@@ -110,7 +115,7 @@ def get_git_sha() -> str:
 
 
 def hash_dataframe(df: pd.DataFrame) -> str:
-    """Hash determinístico de um DataFrame (versão de dados, GAP 05)."""
+    """Hash determinístico de um DataFrame."""
     return hashlib.sha256(pd.util.hash_pandas_object(df).values.tobytes()).hexdigest()[:12]
 
 
@@ -169,7 +174,7 @@ def train(config_path: str | Path = "configs/model_config.yaml") -> str:
                 "model_name": cfg["mlflow"]["registered_model_name"],
                 "model_type": "regression-timeseries-lstm",
                 "framework": "tensorflow-keras",
-                "owner": os.getenv("MLFLOW_OWNER", "grupo-XX"),
+                "owner": os.getenv("MLFLOW_OWNER", "Lima"),
                 "risk_level": "medium",
                 "training_data_version": data_hash,
                 "git_sha": get_git_sha(),
